@@ -1,0 +1,105 @@
+<?php
+/*
+ * Yii-2 Advanced
+ * Database Setup
+ * https://klisl.com
+ */
+
+require "$root/vendor/yiisoft/yii2/helpers/BaseArrayHelper.php";
+require "$root/vendor/yiisoft/yii2/helpers/ArrayHelper.php";
+require "$root/vendor/yiisoft/yii2/helpers/BaseConsole.php";
+require "$root/vendor/yiisoft/yii2/helpers/BaseVarDumper.php";
+require "$root/vendor/yiisoft/yii2/helpers/VarDumper.php";
+
+function dbConfig($root){
+    $db = [
+        'db_host' => 'localhost',
+        'db_name' => null,
+        'username' => 'root',
+        'password' => '',
+        'charset' => 'utf8',
+        'enableSchemaCache' => true,
+        'schemaCacheDuration' => 86400,
+        'schemaCache' => 'cache',
+    ];
+
+    // For advanced
+    $configPath = $root .'/common/config/main-local.php';
+
+    if(!file_exists($configPath)){
+        printError("Not found configuration file: $configPath\n");
+        exit (1);
+    }
+
+    echo "\n  " . formatMessage("Enter your database configuration:\n", ['fg-yellow']) . " \n";
+
+    foreach ($db as $key => $item) {
+        if(in_array($key, ['enableSchemaCache', 'charset'])){
+            continue;
+        }
+
+        $db[$key] = \yii\helpers\BaseConsole::prompt("-> $key:", [
+            'required' => in_array($key, ['db_host', 'db_name', 'username']), //обязательные поля
+            'default' => $db[$key], //значение по-умолчанию
+        ]);
+    }
+
+    $config = changeDatabaseConfig($db);
+    $newConfig = getConfigArray($configPath, $config);
+
+    if(createDatabaseConfigFile($configPath, $newConfig)){
+        echo "\n  " . formatMessage("Configuration saved to file: $configPath\n", ['fg-green']) . " \n";
+        exit (0);
+    }
+
+    printError("Error! Data not saved.\n");
+    exit (1);
+}
+
+/**
+ * @param array $config
+ * @return array
+ */
+function changeDatabaseConfig($config)
+{
+    $config = array_merge(
+        ['class' => 'yii\db\Connection'],
+        ['dsn' => 'mysql:host='.$config['db_host'].';dbname='.$config['db_name']],
+        $config
+        );
+
+    unset($config['db_name'], $config['db_host']);
+    return $config;
+}
+
+/**
+ * @param string $configPath
+ * @param array $configDb
+ * @return mixed
+ */
+function getConfigArray($configPath, $configDb)
+{
+    $defaultConfig = require($configPath);
+
+    if(isset($defaultConfig['components']['db'])){
+        $defaultConfig['components']['db'] = $configDb;
+    } else {
+        $defaultConfig = $configDb;
+    }
+
+    return $defaultConfig;
+}
+
+/**
+ * Save to configuration file
+ * @param string $configPath
+ * @param array $config
+ * @return bool
+ */
+function createDatabaseConfigFile($configPath, $config)
+{
+    $content = "<?php\nreturn " . \yii\helpers\VarDumper::export($config) . ";\n";
+    $content = preg_replace('~\\\\+~', '\\', $content);
+
+    return file_put_contents($configPath, $content) > 0;
+}
